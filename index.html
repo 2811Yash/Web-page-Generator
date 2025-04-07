@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Web Page Generator</title>
+
+  <!-- CodeMirror CSS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css" />
+
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f9;
+    }
+
+    h1 {
+      text-align: center;
+      padding: 20px;
+      color: #333;
+    }
+
+    .controls {
+      padding: 10px 20px;
+      text-align: center;
+    }
+
+    textarea#prompt {
+      width: 60%;
+      height: 60px;
+      font-size: 16px;
+      margin-top: 10px;
+      border-radius: 8px;
+      padding: 10px;
+      border: 2px solid #ccc;
+    }
+
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      font-weight: bold;
+      color: white;
+      background-color: #007bff;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: 0.3s;
+      margin: 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+
+    .loader {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #ffffff;
+      border-radius: 50%;
+      width: 16px;
+      height: 16px;
+      animation: spin 1s linear infinite;
+      display: none;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .container {
+      display: flex;
+      flex-direction: row;
+      height: calc(100vh - 100px);
+      padding: 0 20px 20px 20px;
+      gap: 20px;
+    }
+
+    .editor, .preview {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .editor .CodeMirror {
+      flex: 1;
+      height: 100%;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+    }
+
+    .preview iframe {
+      flex: 1;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+      background: white;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>✨ AI Web Page Generator ✨</h1>
+
+  <div class="controls">
+    <textarea id="prompt" placeholder="Enter prompt..."></textarea>
+    <br />
+    <button id="generateBtn" onclick="generatePage()">
+      <span id="btnText">🚀 Generate Page</span>
+      <span id="btnLoader" class="loader"></span>
+    </button>
+    <!-- Add this inside the .controls div -->
+    <button id="copyBtn" onclick="copyCode()">📋 Copy Code</button>
+    <span id="copyStatus" style="color: green; font-weight: bold; display: none;">Copied!</span>
+
+  </div>
+
+  <div class="container">
+    <div class="editor">
+      <h2>📝 Code Editor</h2>
+      <textarea id="generatedCode"></textarea>
+    </div>
+    <div class="preview">
+      <h2>🌐 Live Preview</h2>
+      <iframe id="outputFrame"></iframe>
+    </div>
+  </div>
+
+  <!-- CodeMirror JS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
+
+  <script>
+    let codeMirrorEditor;
+
+    window.onload = () => {
+      codeMirrorEditor = CodeMirror.fromTextArea(document.getElementById("generatedCode"), {
+        mode: "htmlmixed",
+        theme: "material-darker",
+        lineNumbers: true,
+        lineWrapping: true,
+        tabSize: 2
+      });
+
+      codeMirrorEditor.on("change", updatePreview);
+    };
+
+    function generatePage() {
+      const prompt = document.getElementById("prompt").value;
+      const generateBtn = document.getElementById("generateBtn");
+      const btnText = document.getElementById("btnText");
+      const btnLoader = document.getElementById("btnLoader");
+
+      if (!prompt.trim()) {
+        alert("⚠ Please enter a prompt.");
+        return;
+      }
+
+      generateBtn.disabled = true;
+      btnText.textContent = "Generating...";
+      btnLoader.style.display = "inline-block";
+
+      fetch("/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt })
+      })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            fetch("/get-code")
+              .then(response => response.text())
+              .then(html => {
+                codeMirrorEditor.setValue(html);
+                updatePreview();
+              });
+          } else {
+            alert("❌ Error generating page.");
+          }
+        })
+        .catch(error => {
+          alert("❌ An error occurred. Please try again.");
+          console.error("Error:", error);
+        })
+        .finally(() => {
+          generateBtn.disabled = false;
+          btnText.textContent = "🚀 Generate Page";
+          btnLoader.style.display = "none";
+        });
+    }
+
+    function updatePreview() {
+      const code = codeMirrorEditor.getValue();
+      const iframe = document.getElementById("outputFrame");
+      iframe.srcdoc = code;
+    }
+    function copyCode() {
+  const code = codeMirrorEditor.getValue();
+  navigator.clipboard.writeText(code).then(() => {
+    const status = document.getElementById("copyStatus");
+    status.style.display = "inline";
+    setTimeout(() => {
+      status.style.display = "none";
+    }, 1500);
+  }).catch(err => {
+    alert("❌ Failed to copy code.");
+    console.error(err);
+  });
+}
+  </script>
+</body>
+</html>
+    
